@@ -298,7 +298,7 @@ ecosamp <- function(# Required inputs
   colnames(map_temp_habitat_data) <- "Habitat"
   # Repeat for treatment map if it exists
   if (exists("map_treatmt") & !is.null(map_treatmt)){
-    map_temp_treatmt_data <-  as.data.frame(map_temp_treatmt)
+    map_temp_treatmt_data <-  raster::as.data.frame(map_temp_treatmt)
     colnames(map_temp_treatmt_data) <-  "Treatment"
     # Combine the treatment and habitat data frames
     landscapes <- cbind(map_temp_treatmt_data,map_temp_habitat_data)
