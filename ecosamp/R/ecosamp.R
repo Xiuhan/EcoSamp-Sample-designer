@@ -293,7 +293,7 @@ ecosamp <- function(# Required inputs
   ###############
   ## 2.4.6. Acquire all bins (combinations of habitat*treatment) on map
   # Convert raster maps into data frames to get values
-  map_temp_habitat_data <- as.data.frame(map_temp_habitat)
+  map_temp_habitat_data <- raster::as.data.frame(map_temp_habitat)
   # Rename columns
   colnames(map_temp_habitat_data) <- "Habitat"
   # Repeat for treatment map if it exists
