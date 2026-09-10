@@ -211,7 +211,7 @@ ecosamp <- function(# Required inputs
     
     # Loop through each type of habitat in the map to calculate distance to edge
     print ("Calculating distance to habitat edge...") 
-    for (i in unique(map_habitat)) {
+    for (i in raster::unique(map_habitat)) {
       # Temporal storage
       edge_diff <- map_habitat
       # Assign a value to out-of-boundary pixels in the map
