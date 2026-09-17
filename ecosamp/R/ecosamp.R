@@ -229,7 +229,7 @@ ecosamp <- function(# Required inputs
   # Only perform this section if a min/max distance to roads is specified
   if (exists("map_roads") & !is.null(map_roads) & (road_dist_min>0 | road_dist_max>0)){
     print ("Calculating distance to roads...")   
-    dist_rd <- terra::distance(terra::rast(map_habitat), map_roads, unit="m", rasterize=TRUE, method="haversine")
+    dist_rd <- terra::distance(terra::rast(map_habitat), map_roads, unit="m", rasterize=TRUE)
     # Convert distance map to raster object
     dist_rd <- raster::raster(dist_rd)
   }
@@ -237,7 +237,7 @@ ecosamp <- function(# Required inputs
   # Only perform this section if a min/max distance to waters is specified
   if (exists("map_waters") & !is.null(map_waters) & (water_dist_min>0 | water_dist_max>0)){
     print ("Calculating distance to waters...") 
-    dist_wt <- terra::distance(terra::rast(map_habitat), map_waters, unit="m", rasterize=TRUE, method="haversine")
+    dist_wt <- terra::distance(terra::rast(map_habitat), map_waters, unit="m", rasterize=TRUE)
     # Convert distance map to raster object
     dist_wt <- raster::raster(dist_wt)
   }
@@ -266,7 +266,7 @@ ecosamp <- function(# Required inputs
       edge_diff <- terra::rast(edge_diff)
       edge_diff <- terra::as.polygons(edge_diff)
       # Calculate the distance from each pixel on the map to the nearest "foreign habitat" SF
-      dist_tmp <- terra::distance(terra::rast(map_habitat), edge_diff, unit="m", rasterize=TRUE, method="haversine")
+      dist_tmp <- terra::distance(terra::rast(map_habitat), edge_diff, unit="m", rasterize=TRUE)
       # Convert into a RasterLayer object
       dist_tmp <- raster::raster(dist_tmp)
       # Only keep distance values of pixels with habitat in the current loop
