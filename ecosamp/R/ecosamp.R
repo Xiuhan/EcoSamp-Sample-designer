@@ -28,7 +28,9 @@
 #' 
 #' @param map_roads (optional) SF object, map of roads in sample region.
 #' @param map_waters (optional) SF object, map of waters/hydrography in sample region.
-#' @param map_slope (optional) RasterLayer or SpatRaster, slope angle map of sample region.
+#' @param map_elevation (optional) RasterLayer or SpatRaster, elevation map of sample region.
+#' @param map_slope (optional) RasterLayer or SpatRaster, slope angle map of sample region. 
+#' Can be calculated from map_elevation if not provided.
 #' 
 #' @param map_res (optional) Numeric, resolution (in metres) of sample map processing.
 #' @param sd_crs (optional) String, UTM CRS code of desired output. 
@@ -48,12 +50,23 @@
 #' Requires valid input for param map_roads. 0 by default.
 #' @param road_dist_max (optional) Numeric, maximum distance from points to roads (metres). 
 #' Requires valid input for param map_roads. If left as 0, no maximum distance will be considered. 0 by default.
-#' @param slope_max (optional) Numeric, maximum slope angle to allocate sample points (degrees.)
-#' Requires valid input for param map_slope. If left as 0, no slope angle will be considered. 0 by default.
+#' @param elevation_min (optional) Numeric, minimum elevation of points (metres).
+#' Requires valid input for param map_elevation. If left as 0, it will not be considered. 0 by default.
+#' @param elevation_max (optional) Numeric, maximum elevation of points (metres).
+#' Requires valid input for param map_elevation. If left as 0, it will not be considered. 0 by default.
+#' @param slope_min (optional) Numeric, minimum slope angle to allocate sample points (degrees).
+#' Requires valid input for param map_slope. If left as 0, it will not be considered. 0 by default.
+#' @param slope_max (optional) Numeric, maximum slope angle to allocate sample points (degrees).
+#' Requires valid input for param map_slope. If left as 0, it will not be considered. 0 by default.
 #' 
 #' @param max_distance (optional) Logical. If TRUE, sample points will be allocated at the eligible pixel furthest away from existing points;
 #' if FALSE, sample points will be randomly allocated within eligible regions.
 #' FALSE by default.
+#' @param area_weighting (optional) Logical. If TRUE, sample points will be generated in ascending order of area of eligible bins,
+#' this reduces likelihood of bins with small area being covered by sample points from neighbouring bins with large area;
+#' if FALSE, sample points will be randomly selected from eligible bins.
+#' FALSE by default.
+#' 
 #' @param plot_results (optional) Logical. If TRUE, a map of output sample points will be plotted on back ground of habitat type map. 
 #' FALSE by default.
 #' 
@@ -72,13 +85,14 @@ ecosamp <- function(# Required inputs
   edge_dist_min = 0, edge_dist_max = 0,
   water_dist_min = 0, water_dist_max = 0,
   road_dist_min = 0, road_dist_max = 0,
-  slope_max = 0, map_res = 5,
+  elevation_min = 0, elevation_max = 0,
+  slope_min = 0, slope_max = 0, map_res = 5,
   
   latlon_crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0",
   map_treatmt = NULL,
-  map_roads = NULL,map_waters = NULL,map_slope = NULL,
-  index_habitat = NULL,index_treatmt = NULL,
-  max_distance = FALSE,
+  map_roads = NULL,map_waters = NULL,map_elevation = NULL, map_slope = NULL,
+  index_habitat = NULL, index_treatmt = NULL,
+  max_distance = FALSE, area_weighting = TRUE,
   plot_results = FALSE){
   ###############
   ### 2.4.1. If habitat/treatment maps are polygons, transform them into rasters
@@ -131,7 +145,7 @@ ecosamp <- function(# Required inputs
                                     map_res = map_res)
   }
   # If roads map exists and is an SF object, then reproject its CRS
-  # If it exists and is not an SF object, return an error message
+    # If it exists and is not an SF object, return an error message
   if (exists("map_roads") & !is.null(map_roads) & (road_dist_min>0 | road_dist_max>0)){
     print ("Optional input: roads map detected. Processing...")
     if (is(map_roads, "sf")) {
@@ -144,7 +158,7 @@ ecosamp <- function(# Required inputs
     stop("Minimum/maximum distance to roads specified but no roads map provided. Please provide the roads map.")
   }
   # If water map exists and is an SF object, then reproject its CRS
-  # If it exists and is not an SF object, return an error message
+    # If it exists and is not an SF object, return an error message
   if (exists("map_waters") & !is.null(map_waters) & (water_dist_min>0 | water_dist_max>0)){
     print ("Optional input: water map detected. Processing...")
     if (is(map_waters, "sf")) {
@@ -156,9 +170,26 @@ ecosamp <- function(# Required inputs
   } else if ((water_dist_min>0 | water_dist_max>0) & is.null(map_waters)) {
     stop("Minimum/maximum distance to waters specified but no waters map provided. Please provide the waters map.")
   }
-  # If slope map exists and is an SF object, then reproject its CRS
-  # If it exists and is not an SF object, return an error message
-  if (exists("map_slope") & !is.null(map_slope) & (slope_max>0)){
+  
+  # If elevation map exists and is a RasterLayer/SpatRaster object, then reproject its CRS
+    # If it exists and is not a RasterLayer/SpatRaster object, return an error message
+  if (exists("map_elevation") & !is.null(map_elevation) & (elevation_max>0 | elevation_min>0)){
+    print ("Optional input: elevation map detected. Processing...")
+    if (is(map_elevation, "SpatRaster") | is(map_elevation, "RasterLayer")) {
+      map_elevation <- ecosamp_transcrs(map = map_elevation, sd_crs = sd_crs, 
+                                    map_res = map_res, ref_map = map_habitat)
+    } else {
+      stop("Input elevation map is not RasterLayer or SpatRaster object")
+    }
+  } else if ((elevation_max>0 | elevation_min>0) & is.null(map_elevation)) {
+    # If elevation_max/elevation_min specified without map_elevation provided,
+    # stop function and return an error message.
+    stop("Minimum/maximum elevation specified but no elevation map provided. Please provide a elevation map.")
+  }
+  
+  # If slope map exists and is a RasterLayer/SpatRaster object, then reproject its CRS.
+    # If it exists and is not a RasterLayer/SpatRaster object, return an error message.
+  if (exists("map_slope") & !is.null(map_slope) & (slope_max>0 | slope_min>0)){
     print ("Optional input: slope map detected. Processing...")
     if (is(map_slope, "SpatRaster") | is(map_slope, "RasterLayer")) {
       map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
@@ -166,8 +197,18 @@ ecosamp <- function(# Required inputs
     } else {
       stop("Input slope map is not RasterLayer or SpatRaster object")
     }
-  } else if ((slope_max>0) & is.null(map_slope)) {
-    stop("Maximum slope angle specified but no slope map provided. Please provide the slope map.")
+  } else if ((slope_max>0 | slope_min>0) & is.null(map_slope) & !is.null(map_elevation)) {
+    # If slope_max/slope_min specified without map_slope, but map_elevation provided, 
+      # calculate map_slope from map_elevation.
+    print ("Optional input: calculating slope angle from elevation map...")
+    map_slope <- ecosamp_calcslope(map = map_elevation)
+    # Then standardise CRS and class object of map_slope,
+    map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
+                                  map_res = map_res, ref_map = map_habitat)
+  } else if ((slope_max>0 | slope_min>0) & is.null(map_slope) & is.null(map_elevation)) {
+    # If slope_max/slope_min specified without map_slope nor map_elevation,
+      # stop function and return an error message.
+    stop("Maximum slope angle specified but no slope/elevation map provided. Please provide a slope/elevation map.")
   }
   # Create a RasterStack for later extraction of values
   if (exists("map_treatmt") & !is.null(map_treatmt)){
@@ -188,7 +229,7 @@ ecosamp <- function(# Required inputs
   # Only perform this section if a min/max distance to roads is specified
   if (exists("map_roads") & !is.null(map_roads) & (road_dist_min>0 | road_dist_max>0)){
     print ("Calculating distance to roads...")   
-    dist_rd <- terra::distance(terra::rast(map_habitat), map_roads, unit="m", rasterize=TRUE, haversine=TRUE)
+    dist_rd <- terra::distance(terra::rast(map_habitat), map_roads, unit="m", rasterize=TRUE, method="haversine")
     # Convert distance map to raster object
     dist_rd <- raster::raster(dist_rd)
   }
@@ -196,7 +237,7 @@ ecosamp <- function(# Required inputs
   # Only perform this section if a min/max distance to waters is specified
   if (exists("map_waters") & !is.null(map_waters) & (water_dist_min>0 | water_dist_max>0)){
     print ("Calculating distance to waters...") 
-    dist_wt <- terra::distance(terra::rast(map_habitat), map_waters, unit="m", rasterize=TRUE, haversine=TRUE)
+    dist_wt <- terra::distance(terra::rast(map_habitat), map_waters, unit="m", rasterize=TRUE, method="haversine")
     # Convert distance map to raster object
     dist_wt <- raster::raster(dist_wt)
   }
@@ -225,7 +266,7 @@ ecosamp <- function(# Required inputs
       edge_diff <- terra::rast(edge_diff)
       edge_diff <- terra::as.polygons(edge_diff)
       # Calculate the distance from each pixel on the map to the nearest "foreign habitat" SF
-      dist_tmp <- terra::distance(terra::rast(map_habitat), edge_diff, unit="m", rasterize=TRUE, haversine=TRUE)
+      dist_tmp <- terra::distance(terra::rast(map_habitat), edge_diff, unit="m", rasterize=TRUE, method="haversine")
       # Convert into a RasterLayer object
       dist_tmp <- raster::raster(dist_tmp)
       # Only keep distance values of pixels with habitat in the current loop
@@ -275,6 +316,21 @@ ecosamp <- function(# Required inputs
     map_temp_habitat[dist_ed > edge_dist_max] <- 0
   }
   
+  # If elevation_min > 0, assign 0 to pixels with too low elevation
+  if (elevation_min > 0){
+    map_temp_habitat[map_elevation < elevation_min] <- 0
+  }
+  # If elevation_max > 0, assign 0 to pixels with too high elevation
+  if (elevation_max > 0){
+    map_temp_habitat[map_elevation > elevation_max] <- 0
+  }
+  
+  # If slope_min > 0, assign 0 to pixels with slopes too gentle
+  if (exists("map_slope") & !is.null(map_slope)){
+    if (slope_min > 0){
+      map_temp_habitat[map_slope < slope_min] <- 0
+    }
+  }
   # If slope_max > 0, assign 0 to pixels with slopes too steep
   if (exists("map_slope") & !is.null(map_slope)){
     if (slope_max > 0){
@@ -326,6 +382,7 @@ ecosamp <- function(# Required inputs
   ## 2.4.7.2. Loop to generate sample points
   # Create a copy of combinations
   sd_landscape <- landscapes
+  print(sd_landscape)
   # A variable to count number of generated points
   count <- 0
   
@@ -504,7 +561,7 @@ ecosamp <- function(# Required inputs
   }
   # Report number of sample points generated
   print(paste("Complete! Generated",nrow(sd_points),"sample points."))
-  print("Below are the details")
+  print("Below are the details:")
   
   if (exists("map_treatmt") & !is.null(map_treatmt)){
     print(sd_pointcount %>% dplyr::select("Habitat","Treatment","Number of points"))
