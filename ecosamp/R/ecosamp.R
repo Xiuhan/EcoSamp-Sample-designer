@@ -466,7 +466,7 @@ ecosamp <- function(# Required inputs
         # Convert output into a data frame and create a backup
         samp <- as.data.frame(samp)
         site <- samp
-        
+        print(samp)
         # Convert samp into a spatial data frame
         sp::coordinates(samp) <- ~ x + y
         # Extract the treatment and habitat type of the point
