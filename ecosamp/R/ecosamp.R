@@ -441,8 +441,8 @@ ecosamp <- function(# Required inputs
         sites_sample[map_temp_treatmt==sample_id$Treatment & map_temp_habitat==sample_id$Habitat] <- 1
         sites_sample[map_temp_treatmt!=sample_id$Treatment | map_temp_habitat!=sample_id$Habitat] <- NA
       } else {
-        sites_sample[map_temp_habitat==sample_id] <- 1
-        sites_sample[map_temp_habitat!=sample_id] <- NA
+        sites_sample[map_temp_habitat==sample_id$Habitat] <- 1
+        sites_sample[map_temp_habitat!=sample_id$Habitat] <- NA
       }
       # If there's no further valid region for this bin on the map, 
       # skip this bin and remove it from the list
