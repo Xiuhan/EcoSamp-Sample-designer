@@ -614,7 +614,11 @@ ecosamp <- function(# Required inputs
   }
   # Report number of points in each type of habitat and/or treatment
   print("Below are the details:")
-  print(sd_pointcount %>% dplyr::select(-dplyr::any_of("Habitat","habitat","Treatment","treatment","Number of points")))
+  print(sd_pointcount %>% dplyr::select(dplyr::any_of("Habitat"),
+                                        dplyr::any_of("habitat"),
+                                        dplyr::any_of("Treatment"),
+                                        dplyr::any_of("treatment"),
+                                        dplyr::any_of("Number of points")))
 
   # Create a copy for assigning spatial feature
   sd_points_sp <- sd_points
@@ -623,9 +627,11 @@ ecosamp <- function(# Required inputs
   crs(sd_points_sp) <- sd_crs
   
   # Convert numeric habitat and treatment features back to text
-  sd_points <- sp::merge(sd_points, index_habitat, by.x="habitat",by.y="Index")
-  colnames(sd_points)[length(colnames(sd_points))] <- "Habitat"
-  if (exists("map_treatmt") & !is.null(map_treatmt)){
+  if (exists("index_habitat") & !is.null(index_habitat)){
+    sd_points <- sp::merge(sd_points, index_habitat, by.x="habitat",by.y="Index")
+    colnames(sd_points)[length(colnames(sd_points))] <- "Habitat"
+  }
+  if (exists("map_treatmt") & !is.null(map_treatmt) & exists("index_treatmt") & !is.null(index_treatmt)){
     sd_points <- sp::merge(sd_points, index_treatmt, by.x="treatment",by.y="Index")
     colnames(sd_points)[length(colnames(sd_points))] <- "Treatment"
   }
