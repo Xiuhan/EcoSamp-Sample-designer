@@ -575,6 +575,8 @@ ecosamp <- function(# Required inputs
       break
     }
   } # Loop end
+  # Report number of sample points generated
+  print(paste("Complete! Generated",nrow(sd_points),"sample points."))  
   
   # Remove unnecessary columns in output
   sd_points <- sd_points %>% dplyr::select(-dplyr::any_of("layer"))
@@ -587,21 +589,26 @@ ecosamp <- function(# Required inputs
   
   if (exists("map_treatmt") & !is.null(map_treatmt)){
     sd_pointcount <- sd_points %>% dplyr::group_by(habitat,treatment) %>% dplyr::summarise(num=n())
+    colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Number of points"
     # Convert numeric habitat / treatment index back to text and rename column
-    sd_pointcount <- merge(sd_pointcount, index_habitat, by.x="habitat",by.y="Index")
-    colnames(sd_pointcount)[length(colnames(sd_pointcount))-1] <- "Number of points"
-    colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Habitat"
-    sd_pointcount <- merge(sd_pointcount, index_treatmt, by.x="treatment",by.y="Index")
-    colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Treatment"
+    if (exists("index_habitat") & !is.null(index_habitat)){
+      sd_pointcount <- merge(sd_pointcount, index_habitat, by.x="habitat",by.y="Index")
+      colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Habitat"
+    }
+    if (exists("index_treatmt") & !is.null(index_treatmt)){
+      sd_pointcount <- merge(sd_pointcount, index_treatmt, by.x="treatment",by.y="Index")
+      colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Treatment"
+    }
   } else {
     sd_pointcount <- sd_points %>% dplyr::group_by(habitat) %>% dplyr::summarise(num=n())
+    colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Number of points"
     # Convert numeric habitat / treatment index back to text and rename column
-    sd_pointcount <- merge(sd_pointcount, index_habitat, by.x="habitat",by.y="Index")
-    colnames(sd_pointcount)[length(colnames(sd_pointcount))-1] <- "Number of points"
-    colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Habitat"
+    if (exists("index_habitat") & !is.null(index_habitat)){
+      sd_pointcount <- merge(sd_pointcount, index_habitat, by.x="habitat",by.y="Index")
+      colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Habitat"
+    }
   }
-  # Report number of sample points generated
-  print(paste("Complete! Generated",nrow(sd_points),"sample points."))
+
   print("Below are the details:")
   
   if (exists("map_treatmt") & !is.null(map_treatmt)){
