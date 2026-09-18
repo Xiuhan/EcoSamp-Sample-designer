@@ -382,7 +382,25 @@ ecosamp <- function(# Required inputs
   ## 2.4.7.2. Loop to generate sample points
   # Create a copy of combinations
   sd_landscape <- landscapes
+  # Calculate number of pixels for each combination
+  if (exists("map_treatmt") & !is.null(map_treatmt)){
+    sd_landscape$n_pixels <- mapply(
+      function(treatment, habitat) {
+        sum(map_temp_treatmt[] == treatment & map_temp_habitat[] == habitat,na.rm = TRUE)
+      },
+      sd_landscape$Treatment,
+      sd_landscape$Habitat
+    )
+  } else {
+    sd_landscape$n_pixels <- mapply(
+      function(habitat) {
+        sum(map_temp_habitat[] == habitat,na.rm = TRUE)
+      },
+      sd_landscape$Habitat
+    )
+  }
   print(sd_landscape)
+  
   # A variable to count number of generated points
   count <- 0
   
@@ -433,10 +451,11 @@ ecosamp <- function(# Required inputs
         count <- count - 1
         sd_landscape <- sd_landscape[!(sd_landscape$Habitat==sample_id$Habitat),]
       } else {
-        # If maxdistance is FALSE, randomly select a point in the remaining pixels
+        # If max_distance is FALSE, randomly select a point in the remaining pixels
         if (max_distance == FALSE){
           samp <- raster::sampleRandom(x=sites_sample, size = 1, na.rm = TRUE, xy = TRUE)
         } else  {
+          # If max_distance is TRUE, run ecosamp_maxdist_select to allocate furthest pixel from existing points
           samp <- ecosamp_maxdist_select(sites_sample, sd_points)
         }
         
