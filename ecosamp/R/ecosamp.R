@@ -399,7 +399,6 @@ ecosamp <- function(# Required inputs
       sd_landscape$Habitat
     )
   }
-  print(sd_landscape)
   
   # A variable to count number of generated points
   count <- 0
@@ -467,7 +466,7 @@ ecosamp <- function(# Required inputs
         # Convert output into a data frame and create a backup
         samp <- as.data.frame(samp)
         site <- samp
-        print(samp)
+
         # Convert samp into a spatial data frame
         sp::coordinates(samp) <- ~ x + y
         # Extract the treatment and habitat type of the point
@@ -481,12 +480,14 @@ ecosamp <- function(# Required inputs
         
         # Remove pixels too close to the point generated (prevent points being generated too close)
         #   Calculate distance from each pixel to the new point
-        d1 <- raster::distanceFromPoints(map_temp_habitat, samp) 
-        #   Remove pixels too close to the point
-        map_temp_habitat[d1 <= point_dist_min] <- 0 
-        map_temp_habitat[map_temp_habitat==0] <- NA   
-        if (exists("map_treatmt") & !is.null(map_treatmt)){
-          map_temp_treatmt[map_temp_habitat==0] <- NA
+        if (point_dist_min>0) {
+          d1 <- raster::distanceFromPoints(map_temp_habitat, samp) 
+          #   Remove pixels too close to the point
+          map_temp_habitat[d1 <= point_dist_min] <- 0 
+          map_temp_habitat[map_temp_habitat==0] <- NA   
+          if (exists("map_treatmt") & !is.null(map_treatmt)){
+            map_temp_treatmt[map_temp_habitat==0] <- NA
+          }
         }
         # Update n_pixels column in sd_landscape
         if (exists("map_treatmt") & !is.null(map_treatmt)){
@@ -505,7 +506,6 @@ ecosamp <- function(# Required inputs
             sd_landscape$Habitat
           )
         }
-        print(sd_landscape)
         
         # Add 1 to the count of this combination
         if (exists("map_treatmt") & !is.null(map_treatmt)){
@@ -553,12 +553,14 @@ ecosamp <- function(# Required inputs
       
       # Remove pixels too close to the point generated
       #   Calculate distance from each pixel to the new point
-      d1 <- raster::distanceFromPoints(map_temp_habitat, samp) 
-      #   Remove pixels too close to the point
-      map_temp_habitat[d1<=point_dist_min] <- 0 
-      map_temp_habitat[map_temp_habitat==0] <- NA
-      if (exists("map_treatmt") & !is.null(map_treatmt)){
-        map_temp_treatmt[map_temp_habitat==0] <-  NA
+      if (point_dist_min>0) {
+        d1 <- raster::distanceFromPoints(map_temp_habitat, samp) 
+        #   Remove pixels too close to the point
+        map_temp_habitat[d1<=point_dist_min] <- 0 
+        map_temp_habitat[map_temp_habitat==0] <- NA
+        if (exists("map_treatmt") & !is.null(map_treatmt)){
+          map_temp_treatmt[map_temp_habitat==0] <-  NA
+        }
       }
       
       # Add 1 to the count of this combination
@@ -610,14 +612,10 @@ ecosamp <- function(# Required inputs
       colnames(sd_pointcount)[length(colnames(sd_pointcount))] <- "Habitat"
     }
   }
-
+  # Report number of points in each type of habitat and/or treatment
   print("Below are the details:")
-  
-  if (exists("map_treatmt") & !is.null(map_treatmt)){
-    print(sd_pointcount %>% dplyr::select("Habitat","Treatment","Number of points"))
-  } else {
-    print(sd_pointcount %>% dplyr::select("Habitat","Number of points"))
-  }
+  print(sd_pointcount %>% dplyr::select(-dplyr::any_of("Habitat","habitat","Treatment","treatment","Number of points")))
+
   # Create a copy for assigning spatial feature
   sd_points_sp <- sd_points
   # Convert sd_points_sp into spatial data frame
