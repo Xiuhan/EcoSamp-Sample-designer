@@ -419,10 +419,14 @@ ecosamp <- function(# Required inputs
     
     # Check if there is any remaining in the list of combinations not reaching minimum point number
     if (nrow(sd_landscape) >= 1){
-      # If so, randomly select a row in the list and return to sample_id,
-      #   if not, sample_id will return NA
-      sample_id <- sd_landscape[sample(nrow(sd_landscape), size = 1, replace = FALSE), ]
-      
+      if (area_weighting == TRUE){
+        # If area_weighting is TRUE, the combination with smallest remaining pixel will be selected
+        sample_id <- sd_landscape %>% dplyr::slice_min(n_pixels, n = 1, with_ties = FALSE)
+      } else {
+        # If area_weighting is FALSE, randomly select a row in the list and return to sample_id,
+        #   if not, sample_id will return NA
+        sample_id <- sd_landscape[sample(nrow(sd_landscape), size = 1, replace = FALSE), ]
+      }
     }
     
     # If sample_id is not NA, sample from the pixels with the same treatment*habitat combination
@@ -483,6 +487,24 @@ ecosamp <- function(# Required inputs
         if (exists("map_treatmt") & !is.null(map_treatmt)){
           map_temp_treatmt[map_temp_habitat==0] <- NA
         }
+        # Update n_pixels column in sd_landscape
+        if (exists("map_treatmt") & !is.null(map_treatmt)){
+          sd_landscape$n_pixels <- mapply(
+            function(treatment, habitat) {
+              sum(map_temp_treatmt[] == treatment & map_temp_habitat[] == habitat,na.rm = TRUE)
+            },
+            sd_landscape$Treatment,
+            sd_landscape$Habitat
+          )
+        } else {
+          sd_landscape$n_pixels <- mapply(
+            function(habitat) {
+              sum(map_temp_habitat[] == habitat,na.rm = TRUE)
+            },
+            sd_landscape$Habitat
+          )
+        }
+        print(sd_landscape)
         
         # Add 1 to the count of this combination
         if (exists("map_treatmt") & !is.null(map_treatmt)){
