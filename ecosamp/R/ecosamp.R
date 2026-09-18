@@ -438,11 +438,12 @@ ecosamp <- function(# Required inputs
       # Only keep pixels with the same treatment*habitat combination as sample_id
       #   discard other pixels
       if (exists("map_treatmt") & !is.null(map_treatmt)){
-        sites_sample[map_temp_treatmt==sample_id$Treatment & map_temp_habitat==sample_id$Habitat] <- 1
-        sites_sample[map_temp_treatmt!=sample_id$Treatment | map_temp_habitat!=sample_id$Habitat] <- NA
+        sites_sample[] <- ifelse(map_temp_treatmt[]==sample_id$Treatment & 
+                                   map_temp_habitat[]==sample_id$Habitat,
+                                 1,
+                                 NA)
       } else {
-        sites_sample[map_temp_habitat==sample_id$Habitat] <- 1
-        sites_sample[map_temp_habitat!=sample_id$Habitat] <- NA
+        sites_sample[] <- ifelse(map_temp_habitat[] == sample_id$Habitat,1,NA)
       }
       # If there's no further valid region for this bin on the map, 
       # skip this bin and remove it from the list
@@ -575,6 +576,7 @@ ecosamp <- function(# Required inputs
       break
     }
   } # Loop end
+
   # Report number of sample points generated
   print(paste("Complete! Generated",nrow(sd_points),"sample points."))  
   
