@@ -16,16 +16,21 @@ ecosamp(
   water_dist_max = 0,
   road_dist_min = 0,
   road_dist_max = 0,
+  elevation_min = 0,
+  elevation_max = 0,
+  slope_min = 0,
   slope_max = 0,
   map_res = 5,
   latlon_crs = "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0",
   map_treatmt = NULL,
   map_roads = NULL,
   map_waters = NULL,
+  map_elevation = NULL,
   map_slope = NULL,
   index_habitat = NULL,
   index_treatmt = NULL,
   max_distance = FALSE,
+  area_weighting = TRUE,
   plot_results = FALSE
 )
 }
@@ -58,8 +63,17 @@ Requires valid input for param map_roads. 0 by default.}
 \item{road_dist_max}{(optional) Numeric, maximum distance from points to roads (metres).
 Requires valid input for param map_roads. If left as 0, no maximum distance will be considered. 0 by default.}
 
-\item{slope_max}{(optional) Numeric, maximum slope angle to allocate sample points (degrees.)
-Requires valid input for param map_slope. If left as 0, no slope angle will be considered. 0 by default.}
+\item{elevation_min}{(optional) Numeric, minimum elevation of points (metres).
+Requires valid input for param map_elevation. If left as 0, it will not be considered. 0 by default.}
+
+\item{elevation_max}{(optional) Numeric, maximum elevation of points (metres).
+Requires valid input for param map_elevation. If left as 0, it will not be considered. 0 by default.}
+
+\item{slope_min}{(optional) Numeric, minimum slope angle to allocate sample points (degrees).
+Requires valid input for param map_slope. If left as 0, it will not be considered. 0 by default.}
+
+\item{slope_max}{(optional) Numeric, maximum slope angle to allocate sample points (degrees).
+Requires valid input for param map_slope. If left as 0, it will not be considered. 0 by default.}
 
 \item{map_res}{(optional) Numeric, resolution (in metres) of sample map processing.}
 
@@ -72,7 +86,10 @@ If left as NULL, WGS 84 (EPSG:4326) (latitude/longitude in degrees) will be used
 
 \item{map_waters}{(optional) SF object, map of waters/hydrography in sample region.}
 
-\item{map_slope}{(optional) RasterLayer or SpatRaster, slope angle map of sample region.}
+\item{map_elevation}{(optional) RasterLayer or SpatRaster, elevation map of sample region.}
+
+\item{map_slope}{(optional) RasterLayer or SpatRaster, slope angle map of sample region.
+Can be calculated from map_elevation if not provided.}
 
 \item{index_habitat}{(optional) Data frame. If map_habitat is a SF object,
 a data frame with 2 columns is required to convert it into a RasterLayer:
@@ -92,6 +109,11 @@ NULL by default.}
 
 \item{max_distance}{(optional) Logical. If TRUE, sample points will be allocated at the eligible pixel furthest away from existing points;
 if FALSE, sample points will be randomly allocated within eligible regions.
+FALSE by default.}
+
+\item{area_weighting}{(optional) Logical. If TRUE, sample points will be generated in ascending order of area of eligible bins,
+this reduces likelihood of bins with small area being covered by sample points from neighbouring bins with large area;
+if FALSE, sample points will be randomly selected from eligible bins.
 FALSE by default.}
 
 \item{plot_results}{(optional) Logical. If TRUE, a map of output sample points will be plotted on back ground of habitat type map.
