@@ -193,7 +193,8 @@ ecosamp <- function(# Required inputs
     print ("Optional input: slope map detected. Processing...")
     if (is(map_slope, "SpatRaster") | is(map_slope, "RasterLayer")) {
       map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
-                                    map_res = map_res, ref_map = map_habitat)
+                                    map_res = map_res)
+      map_slope <- raster::crop(map_slope,extent(map_habitat))
     } else {
       stop("Input slope map is not RasterLayer or SpatRaster object")
     }
