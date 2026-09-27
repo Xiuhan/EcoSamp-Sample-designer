@@ -59,13 +59,13 @@
 #' @param slope_max (optional) Numeric, maximum slope angle to allocate sample points (degrees).
 #' Requires valid input for param map_slope. If left as 0, it will not be considered. 0 by default.
 #' 
-#' @param max_distance (optional) Logical. If TRUE, sample points will be allocated at the eligible pixel furthest away from existing points;
+#' @param max_distance_sampling (optional) Logical. If TRUE, sample points will be allocated at the eligible pixel furthest away from existing points;
 #' if FALSE, sample points will be randomly allocated within eligible regions.
 #' FALSE by default.
 #' @param area_weighting (optional) Logical. If TRUE, sample points will be generated in ascending order of area of eligible bins,
 #' this reduces likelihood of bins with small area being covered by sample points from neighbouring bins with large area;
 #' if FALSE, sample points will be randomly selected from eligible bins.
-#' FALSE by default.
+#' TRUE by default.
 #' 
 #' @param plot_results (optional) Logical. If TRUE, a map of output sample points will be plotted on back ground of habitat type map. 
 #' FALSE by default.
@@ -92,7 +92,7 @@ ecosamp <- function(# Required inputs
   map_treatmt = NULL,
   map_roads = NULL,map_waters = NULL,map_elevation = NULL, map_slope = NULL,
   index_habitat = NULL, index_treatmt = NULL,
-  max_distance = FALSE, area_weighting = TRUE,
+  max_distance_sampling = FALSE, area_weighting = TRUE,
   plot_results = FALSE){
   ###############
   ### 2.4.1. If habitat/treatment maps are polygons, transform them into rasters
@@ -455,11 +455,11 @@ ecosamp <- function(# Required inputs
         count <- count - 1
         sd_landscape <- sd_landscape[!(sd_landscape$Habitat==sample_id$Habitat),]
       } else {
-        # If max_distance is FALSE, randomly select a point in the remaining pixels
-        if (max_distance == FALSE){
+        # If max_distance_sampling is FALSE, randomly select a point in the remaining pixels
+        if (max_distance_sampling == FALSE){
           samp <- raster::sampleRandom(x=sites_sample, size = 1, na.rm = TRUE, xy = TRUE)
         } else  {
-          # If max_distance is TRUE, run ecosamp_maxdist_select to allocate furthest pixel from existing points
+          # If max_distance_sampling is TRUE, run ecosamp_maxdist_select to allocate furthest pixel from existing points
           samp <- ecosamp_maxdist_select(sites_sample, sd_points)
         }
         
@@ -530,7 +530,7 @@ ecosamp <- function(# Required inputs
       sites_sample <- map_temp_habitat
       # Randomly select a point in the remaining pixels
       # If maxdistance is FALSE, randomly select a point in the remaining pixels
-      if (max_distance == FALSE){
+      if (max_distance_sampling == FALSE){
         samp <- raster::sampleRandom(x=sites_sample, size = 1, na.rm = TRUE, xy = TRUE)
       } else  {
         samp <- ecosamp_maxdist_select(sites_sample, sd_points)

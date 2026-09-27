@@ -33,9 +33,9 @@ ecosamp_transcrs <- function(map, sd_crs, map_res = 5, ref_map = NULL){
       map_transformed <- raster::crop(map,extent(ref_map))
     }
   } else if (is(map, "sf")) {
-    # If map is a SF object, convert it into a vector and then to corresponding CRS
-    map <- terra::vect(map)
-    map_transformed <- terra::project(map, sd_crs)
+    # If map is a SF object, convert it into the corresponding CRS and to a SpatVector
+    map_transformed <- sf::st_transform(map, crs = sd_crs)
+    map_transformed <- terra::vect(map_transformed)
   } else if (is(map, "SpatRaster")) {
     # If map is a SpatRaster object (for slope map), crop and convert it to corresponding CRS
     ref_map <- raster::projectRaster(ref_map,crs = crs(map),method = "ngb")
