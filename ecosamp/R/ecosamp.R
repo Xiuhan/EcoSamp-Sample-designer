@@ -176,9 +176,13 @@ ecosamp <- function(# Required inputs
   if (exists("map_slope") & !is.null(map_slope) & (slope_max>0 | slope_min>0)){
     print ("Optional input: slope map detected. Processing...")
     if (is(map_slope, "SpatRaster") | is(map_slope, "RasterLayer")) {
+      # Create a temporary habitat map for cropping map_slope
+      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_slope), 
+                                  map_res = res(map_slope))
+      map_slope <- raster::crop(map_slope,ext(map_ref))
+      # Then standardise CRS and class object of map_slope
       map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
                                     map_res = map_res)
-      map_slope <- raster::crop(map_slope,extent(map_habitat))
     } else {
       stop("Input slope map is not RasterLayer or SpatRaster object")
     }
@@ -187,10 +191,14 @@ ecosamp <- function(# Required inputs
     # calculate map_slope from map_elevation.
     print ("Optional input: calculating slope angle from elevation map...")
     map_slope <- ecosamp_calcslope(map = map_elevation)
-    # Then standardise CRS and class object of map_slope,
+    # Create a temporary habitat map for cropping map_slope
+    map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_slope), 
+                                map_res = res(map_slope))
+    map_slope <- raster::crop(map_slope,ext(map_ref))
+    # Then standardise CRS and class object of map_slope
     map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
                                   map_res = map_res)
-    map_slope <- raster::crop(map_slope,extent(map_habitat))
+
   } else if ((slope_max>0 | slope_min>0) & is.null(map_slope) & is.null(map_elevation)) {
     # If slope_max/slope_min specified without map_slope nor map_elevation,
     # stop function and return an error message.
@@ -202,9 +210,12 @@ ecosamp <- function(# Required inputs
   if (exists("map_elevation") & !is.null(map_elevation) & (elevation_max>0 | elevation_min>0)){
     print ("Optional input: elevation map detected. Processing...")
     if (is(map_elevation, "SpatRaster") | is(map_elevation, "RasterLayer")) {
+      # Create a temporary habitat map for cropping map_elevation
+      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_elevation), map_res = res(map_elevation))
+      map_elevation <- raster::crop(map_elevation,ext(map_ref))
+      # Then standardise CRS and class object of map_elevation
       map_elevation <- ecosamp_transcrs(map = map_elevation, sd_crs = sd_crs, 
                                     map_res = map_res)
-      map_elevation <- raster::crop(map_elevation,extent(map_habitat))
     } else {
       stop("Input elevation map is not RasterLayer or SpatRaster object")
     }
