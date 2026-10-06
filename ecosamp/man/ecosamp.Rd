@@ -29,7 +29,7 @@ ecosamp(
   map_slope = NULL,
   index_habitat = NULL,
   index_treatmt = NULL,
-  max_distance = FALSE,
+  max_distance_sampling = FALSE,
   area_weighting = TRUE,
   plot_results = FALSE
 )
@@ -107,14 +107,14 @@ Types of treatments assigned Index = 0 will not be considered for sample generat
 If left as NULL, an unique positive number will be assigned to each treatment type present in the map.
 NULL by default.}
 
-\item{max_distance}{(optional) Logical. If TRUE, sample points will be allocated at the eligible pixel furthest away from existing points;
+\item{max_distance_sampling}{(optional) Logical. If TRUE, sample points will be allocated at the eligible pixel furthest away from existing points;
 if FALSE, sample points will be randomly allocated within eligible regions.
 FALSE by default.}
 
 \item{area_weighting}{(optional) Logical. If TRUE, sample points will be generated in ascending order of area of eligible bins,
 this reduces likelihood of bins with small area being covered by sample points from neighbouring bins with large area;
 if FALSE, sample points will be randomly selected from eligible bins.
-FALSE by default.}
+TRUE by default.}
 
 \item{plot_results}{(optional) Logical. If TRUE, a map of output sample points will be plotted on back ground of habitat type map.
 FALSE by default.}
