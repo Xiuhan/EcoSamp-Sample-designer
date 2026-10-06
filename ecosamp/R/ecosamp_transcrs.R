@@ -1,7 +1,7 @@
 #' EcoSamp CRS transformation function
 #'
 #' This function is a sub-function of ecosamp() function, which doesn't work on its own.
-#' It loads the input target map, CRS, resolution and reference map (if provided),
+#' It loads the input target map, CRS, and resolution,
 #' generated/specified in the main function.
 #' The function then transforms the CRS of the target map, and converts it based on its class:
 #' 1. RasterLayer object: transforms map CRS into sd_crs, crop it to the same area as habitat map, if not the same.
@@ -27,9 +27,6 @@ ecosamp_transcrs <- function(map, sd_crs, map_res = 5){
     # If map is a RasterLayer, convert it to corresponding resolution and CRS
     map_transformed <- raster::projectRaster(map,crs = sd_crs,res = map_res,method = "ngb")
     # When input is the slope map, it will be cropped to the same area as the habitat map
-    if (!is.null(ref_map)){
-      map_transformed <- raster::crop(map,extent(ref_map))
-    }
   } else if (is(map, "sf")) {
     # If map is a SF object, convert it into the corresponding CRS and to a SpatVector
     map_transformed <- sf::st_transform(map, crs = sd_crs)

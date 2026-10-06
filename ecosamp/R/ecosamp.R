@@ -169,26 +169,10 @@ ecosamp <- function(# Required inputs
     }
   } else if ((water_dist_min>0 | water_dist_max>0) & is.null(map_waters)) {
     stop("Minimum/maximum distance to waters specified but no waters map provided. Please provide the waters map.")
-  }
-  
-  # If elevation map exists and is a RasterLayer/SpatRaster object, then reproject its CRS
-    # If it exists and is not a RasterLayer/SpatRaster object, return an error message
-  if (exists("map_elevation") & !is.null(map_elevation) & (elevation_max>0 | elevation_min>0)){
-    print ("Optional input: elevation map detected. Processing...")
-    if (is(map_elevation, "SpatRaster") | is(map_elevation, "RasterLayer")) {
-      map_elevation <- ecosamp_transcrs(map = map_elevation, sd_crs = sd_crs, 
-                                    map_res = map_res, ref_map = map_habitat)
-    } else {
-      stop("Input elevation map is not RasterLayer or SpatRaster object")
-    }
-  } else if ((elevation_max>0 | elevation_min>0) & is.null(map_elevation)) {
-    # If elevation_max/elevation_min specified without map_elevation provided,
-    # stop function and return an error message.
-    stop("Minimum/maximum elevation specified but no elevation map provided. Please provide a elevation map.")
-  }
+  }  
   
   # If slope map exists and is a RasterLayer/SpatRaster object, then reproject its CRS.
-    # If it exists and is not a RasterLayer/SpatRaster object, return an error message.
+  # If it exists and is not a RasterLayer/SpatRaster object, return an error message.
   if (exists("map_slope") & !is.null(map_slope) & (slope_max>0 | slope_min>0)){
     print ("Optional input: slope map detected. Processing...")
     if (is(map_slope, "SpatRaster") | is(map_slope, "RasterLayer")) {
@@ -200,17 +184,36 @@ ecosamp <- function(# Required inputs
     }
   } else if ((slope_max>0 | slope_min>0) & is.null(map_slope) & !is.null(map_elevation)) {
     # If slope_max/slope_min specified without map_slope, but map_elevation provided, 
-      # calculate map_slope from map_elevation.
+    # calculate map_slope from map_elevation.
     print ("Optional input: calculating slope angle from elevation map...")
     map_slope <- ecosamp_calcslope(map = map_elevation)
     # Then standardise CRS and class object of map_slope,
     map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
-                                  map_res = map_res, ref_map = map_habitat)
+                                  map_res = map_res)
+    map_slope <- raster::crop(map_slope,extent(map_habitat))
   } else if ((slope_max>0 | slope_min>0) & is.null(map_slope) & is.null(map_elevation)) {
     # If slope_max/slope_min specified without map_slope nor map_elevation,
-      # stop function and return an error message.
+    # stop function and return an error message.
     stop("Maximum slope angle specified but no slope/elevation map provided. Please provide a slope/elevation map.")
   }
+  
+  # If elevation map exists and is a RasterLayer/SpatRaster object, then reproject its CRS
+    # If it exists and is not a RasterLayer/SpatRaster object, return an error message
+  if (exists("map_elevation") & !is.null(map_elevation) & (elevation_max>0 | elevation_min>0)){
+    print ("Optional input: elevation map detected. Processing...")
+    if (is(map_elevation, "SpatRaster") | is(map_elevation, "RasterLayer")) {
+      map_elevation <- ecosamp_transcrs(map = map_elevation, sd_crs = sd_crs, 
+                                    map_res = map_res)
+      map_elevation <- raster::crop(map_elevation,extent(map_habitat))
+    } else {
+      stop("Input elevation map is not RasterLayer or SpatRaster object")
+    }
+  } else if ((elevation_max>0 | elevation_min>0) & is.null(map_elevation)) {
+    # If elevation_max/elevation_min specified without map_elevation provided,
+    # stop function and return an error message.
+    stop("Minimum/maximum elevation specified but no elevation map provided. Please provide a elevation map.")
+  }
+
   # Create a RasterStack for later extraction of values
   if (exists("map_treatmt") & !is.null(map_treatmt)){
     map_refmap <- raster::stack(map_habitat,map_treatmt)
@@ -414,8 +417,6 @@ ecosamp <- function(# Required inputs
     count <- count+1
     # A variable to select combinations that have no reached the minimum number of points
     sample_id <- NA
-    
-    #browser()
     
     # Check if there is any remaining in the list of combinations not reaching minimum point number
     if (nrow(sd_landscape) >= 1){
