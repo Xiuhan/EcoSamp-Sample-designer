@@ -73,6 +73,8 @@
 #' @return A data frame containing sample point IDs, coordinates in specified CRSs, 
 #' type of habitat (and treatment, distance to edge, distance to road, distance to water, 
 #' and slope angle if specified) of generated sample points.
+#' @importFrom dplyr %>% n
+#' @importFrom methods is
 #' @export
 ecosamp <- function(# Required inputs
   n_total,
@@ -110,7 +112,7 @@ ecosamp <- function(# Required inputs
   # Do the same for treatment map (if exists)
   if (exists("map_treatmt") & !is.null(map_treatmt) & is(map_treatmt, "sf")) {
     # If an index is not provided, create a default one with all types of treatments
-    if (is.null(index_habitat)){
+    if (is.null(index_treatmt)){
       index_treatmt <- data.frame(Field=unique(map_treatmt$Treatment),
                                   Index=1:length(unique(map_treatmt$Treatment)))
     }
@@ -177,9 +179,9 @@ ecosamp <- function(# Required inputs
     print ("Optional input: slope map detected. Processing...")
     if (is(map_slope, "SpatRaster") | is(map_slope, "RasterLayer")) {
       # Create a temporary habitat map for cropping map_slope
-      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_slope), 
-                                  map_res = res(map_slope))
-      map_slope <- raster::crop(map_slope,ext(map_ref))
+      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = raster::crs(map_slope), 
+                                  map_res = raster::res(map_slope))
+      map_slope <- raster::crop(map_slope,terra::ext(map_ref))
       # Then standardise CRS and class object of map_slope
       map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
                                     map_res = map_res)
@@ -192,9 +194,9 @@ ecosamp <- function(# Required inputs
     print ("Optional input: calculating slope angle from elevation map...")
     map_slope <- ecosamp_calcslope(map = map_elevation)
     # Create a temporary habitat map for cropping map_slope
-    map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_slope), 
-                                map_res = res(map_slope))
-    map_slope <- raster::crop(map_slope,ext(map_ref))
+    map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = raster::crs(map_slope), 
+                                map_res = raster::res(map_slope))
+    map_slope <- raster::crop(map_slope,terra::ext(map_ref))
     # Then standardise CRS and class object of map_slope
     map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
                                   map_res = map_res)
@@ -211,8 +213,8 @@ ecosamp <- function(# Required inputs
     print ("Optional input: elevation map detected. Processing...")
     if (is(map_elevation, "SpatRaster") | is(map_elevation, "RasterLayer")) {
       # Create a temporary habitat map for cropping map_elevation
-      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_elevation), map_res = res(map_elevation))
-      map_elevation <- raster::crop(map_elevation,ext(map_ref))
+      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = raster::crs(map_elevation), map_res = raster::res(map_elevation))
+      map_elevation <- raster::crop(map_elevation,terra::ext(map_ref))
       # Then standardise CRS and class object of map_elevation
       map_elevation <- ecosamp_transcrs(map = map_elevation, sd_crs = sd_crs, 
                                     map_res = map_res)
@@ -263,7 +265,7 @@ ecosamp <- function(# Required inputs
   if (edge_dist_min > 0 | edge_dist_max > 0){  
     # Create an empty RasterLayer object of the region for storing data
     sites_edge <- map_habitat
-    values(sites_edge) <- 0
+    raster::values(sites_edge) <- 0
     
     # Loop through each type of habitat in the map to calculate distance to edge
     print ("Calculating distance to habitat edge...") 
@@ -415,6 +417,12 @@ ecosamp <- function(# Required inputs
     )
   }
   
+  # If no minimum number of points per bin is required, skip the bin-filling
+  #   stage, so all points are sampled from the whole eligible region
+  if (point_number_min <= 0){
+    sd_landscape <- sd_landscape[0, ]
+  }
+  
   # A variable to count number of generated points
   count <- 0
   
@@ -466,7 +474,13 @@ ecosamp <- function(# Required inputs
           message(paste("Treatment:",index_treatmt$Field[index_treatmt$Index==sample_id$Treatment]))
         }
         count <- count - 1
-        sd_landscape <- sd_landscape[!(sd_landscape$Habitat==sample_id$Habitat),]
+        # Only remove this habitat*treatment combination, not other treatments of the same habitat
+        if (exists("map_treatmt") & !is.null(map_treatmt)){
+          sd_landscape <- sd_landscape[!(sd_landscape$Treatment==sample_id$Treatment & 
+                                           sd_landscape$Habitat==sample_id$Habitat),]
+        } else {
+          sd_landscape <- sd_landscape[!(sd_landscape$Habitat==sample_id$Habitat),]
+        }
       } else {
         # If max_distance_sampling is FALSE, randomly select a point in the remaining pixels
         if (max_distance_sampling == FALSE){
@@ -525,14 +539,14 @@ ecosamp <- function(# Required inputs
           sd_pointcount$points[sd_pointcount$habitat==site$habitat & sd_pointcount$treatment==site$treatment] <- 
             sd_pointcount$points[sd_pointcount$habitat==site$habitat & sd_pointcount$treatment==site$treatment]+1
           # If minimum number is reached for this combination, remove it from the list
-          if (sd_pointcount$points[sd_pointcount$habitat==site$habitat & sd_pointcount$treatment==site$treatment]==point_number_min){
+          if (sd_pointcount$points[sd_pointcount$habitat==site$habitat & sd_pointcount$treatment==site$treatment]>=point_number_min){
             sd_landscape <- sd_landscape[!(sd_landscape$Treatment==site$treatment & sd_landscape$Habitat==site$habitat),]
           }
         } else {
           sd_pointcount$points[sd_pointcount$habitat==site$habitat] <- 
             sd_pointcount$points[sd_pointcount$habitat==site$habitat]+1
           # If minimum number is reached for this combination, remove it from the list
-          if (sd_pointcount$points[sd_pointcount$habitat==site$habitat]==point_number_min){
+          if (sd_pointcount$points[sd_pointcount$habitat==site$habitat]>=point_number_min){
             sd_landscape <- sd_landscape[!(sd_landscape$Habitat==site$habitat),]
           }      
         }
@@ -637,7 +651,7 @@ ecosamp <- function(# Required inputs
   sd_points_sp <- sd_points
   # Convert sd_points_sp into spatial data frame
   sp::coordinates(sd_points_sp) <- ~x+y
-  crs(sd_points_sp) <- sd_crs
+  raster::crs(sd_points_sp) <- sd_crs
   
   # Convert numeric habitat and treatment features back to text
   if (exists("index_habitat") & !is.null(index_habitat)){
