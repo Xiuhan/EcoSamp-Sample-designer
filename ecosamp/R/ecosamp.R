@@ -263,38 +263,8 @@ ecosamp <- function(# Required inputs
   ## 2.4.4. Calculate distances to habitat edge
   # Only run this section if a min/max distance to edge is specified
   if (edge_dist_min > 0 | edge_dist_max > 0){  
-    # Create an empty RasterLayer object of the region for storing data
-    sites_edge <- map_habitat
-    raster::values(sites_edge) <- 0
-    
-    # Loop through each type of habitat in the map to calculate distance to edge
     print ("Calculating distance to habitat edge...") 
-    for (i in raster::unique(map_habitat)) {
-      # Temporal storage
-      edge_diff <- map_habitat
-      # Assign a value to out-of-boundary pixels in the map
-      edge_diff[is.na(edge_diff)] <- 99999
-      # Create an SF object for all other habitats ("foreign habitats") except the current one in the loop
-      #   Empty pixels with the same type of habitat
-      edge_diff[edge_diff==i] <- NA
-      #   Assign an uniform value to all "foreign habitats"
-      edge_diff[edge_diff!=i] <- 1
-      #   Convert the "foreign habitats" into a SpatRaster object, then into SF polygon object
-      edge_diff <- terra::rast(edge_diff)
-      edge_diff <- terra::as.polygons(edge_diff)
-      # Calculate the distance from each pixel on the map to the nearest "foreign habitat" SF
-      dist_tmp <- terra::distance(terra::rast(map_habitat), edge_diff, unit="m", rasterize=TRUE)
-      # Convert into a RasterLayer object
-      dist_tmp <- raster::raster(dist_tmp)
-      # Only keep distance values of pixels with habitat in the current loop
-      dist_tmp[map_habitat!=i] <- 0
-      
-      # Sum distances of current loop and previous loops
-      store_tmp <- raster::stack(sites_edge,dist_tmp)
-      sites_edge <- raster::calc(store_tmp,sum)
-    }
-    # Copy final output
-    dist_ed <- sites_edge
+    dist_ed <- ecosamp_edgedist(map_habitat)
   }
   
   ###############
