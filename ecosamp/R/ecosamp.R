@@ -73,6 +73,8 @@
 #' @return A data frame containing sample point IDs, coordinates in specified CRSs, 
 #' type of habitat (and treatment, distance to edge, distance to road, distance to water, 
 #' and slope angle if specified) of generated sample points.
+#' @importFrom dplyr %>% n
+#' @importFrom methods is
 #' @export
 ecosamp <- function(# Required inputs
   n_total,
@@ -110,7 +112,7 @@ ecosamp <- function(# Required inputs
   # Do the same for treatment map (if exists)
   if (exists("map_treatmt") & !is.null(map_treatmt) & is(map_treatmt, "sf")) {
     # If an index is not provided, create a default one with all types of treatments
-    if (is.null(index_habitat)){
+    if (is.null(index_treatmt)){
       index_treatmt <- data.frame(Field=unique(map_treatmt$Treatment),
                                   Index=1:length(unique(map_treatmt$Treatment)))
     }
@@ -177,9 +179,9 @@ ecosamp <- function(# Required inputs
     print ("Optional input: slope map detected. Processing...")
     if (is(map_slope, "SpatRaster") | is(map_slope, "RasterLayer")) {
       # Create a temporary habitat map for cropping map_slope
-      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_slope), 
-                                  map_res = res(map_slope))
-      map_slope <- raster::crop(map_slope,ext(map_ref))
+      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = raster::crs(map_slope), 
+                                  map_res = raster::res(map_slope))
+      map_slope <- raster::crop(map_slope,terra::ext(map_ref))
       # Then standardise CRS and class object of map_slope
       map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
                                     map_res = map_res)
@@ -192,9 +194,9 @@ ecosamp <- function(# Required inputs
     print ("Optional input: calculating slope angle from elevation map...")
     map_slope <- ecosamp_calcslope(map = map_elevation)
     # Create a temporary habitat map for cropping map_slope
-    map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_slope), 
-                                map_res = res(map_slope))
-    map_slope <- raster::crop(map_slope,ext(map_ref))
+    map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = raster::crs(map_slope), 
+                                map_res = raster::res(map_slope))
+    map_slope <- raster::crop(map_slope,terra::ext(map_ref))
     # Then standardise CRS and class object of map_slope
     map_slope <- ecosamp_transcrs(map = map_slope, sd_crs = sd_crs, 
                                   map_res = map_res)
@@ -211,8 +213,8 @@ ecosamp <- function(# Required inputs
     print ("Optional input: elevation map detected. Processing...")
     if (is(map_elevation, "SpatRaster") | is(map_elevation, "RasterLayer")) {
       # Create a temporary habitat map for cropping map_elevation
-      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = crs(map_elevation), map_res = res(map_elevation))
-      map_elevation <- raster::crop(map_elevation,ext(map_ref))
+      map_ref <- ecosamp_transcrs(map = map_habitat, sd_crs = raster::crs(map_elevation), map_res = raster::res(map_elevation))
+      map_elevation <- raster::crop(map_elevation,terra::ext(map_ref))
       # Then standardise CRS and class object of map_elevation
       map_elevation <- ecosamp_transcrs(map = map_elevation, sd_crs = sd_crs, 
                                     map_res = map_res)
@@ -261,126 +263,102 @@ ecosamp <- function(# Required inputs
   ## 2.4.4. Calculate distances to habitat edge
   # Only run this section if a min/max distance to edge is specified
   if (edge_dist_min > 0 | edge_dist_max > 0){  
-    # Create an empty RasterLayer object of the region for storing data
-    sites_edge <- map_habitat
-    values(sites_edge) <- 0
-    
-    # Loop through each type of habitat in the map to calculate distance to edge
     print ("Calculating distance to habitat edge...") 
-    for (i in raster::unique(map_habitat)) {
-      # Temporal storage
-      edge_diff <- map_habitat
-      # Assign a value to out-of-boundary pixels in the map
-      edge_diff[is.na(edge_diff)] <- 99999
-      # Create an SF object for all other habitats ("foreign habitats") except the current one in the loop
-      #   Empty pixels with the same type of habitat
-      edge_diff[edge_diff==i] <- NA
-      #   Assign an uniform value to all "foreign habitats"
-      edge_diff[edge_diff!=i] <- 1
-      #   Convert the "foreign habitats" into a SpatRaster object, then into SF polygon object
-      edge_diff <- terra::rast(edge_diff)
-      edge_diff <- terra::as.polygons(edge_diff)
-      # Calculate the distance from each pixel on the map to the nearest "foreign habitat" SF
-      dist_tmp <- terra::distance(terra::rast(map_habitat), edge_diff, unit="m", rasterize=TRUE)
-      # Convert into a RasterLayer object
-      dist_tmp <- raster::raster(dist_tmp)
-      # Only keep distance values of pixels with habitat in the current loop
-      dist_tmp[map_habitat!=i] <- 0
-      
-      # Sum distances of current loop and previous loops
-      store_tmp <- raster::stack(sites_edge,dist_tmp)
-      sites_edge <- raster::calc(store_tmp,sum)
-    }
-    # Copy final output
-    dist_ed <- sites_edge
+    dist_ed <- ecosamp_edgedist(map_habitat)
   }
   
   ###############
   ## 2.4.5. Selection of eligible sample region
-  # Make a copy of habitat map
-  map_temp_habitat <- map_habitat
+  # Work with plain vectors of pixel values (one value per pixel of the habitat map), which is
+  #   much faster and lighter on memory than repeatedly copying RasterLayer objects.
+  #   The road, water and edge distance maps are on the same grid as the habitat map.
+  values_habitat <- raster::values(map_habitat)
+  # Pixels excluded from the sample design: outside the map, or habitat assigned a value of 0
+  excluded <- is.na(values_habitat) | values_habitat == 0
   
-  # Assign 0 to pixels too close to the road
+  # Exclude pixels too close to (or too far from) the road
   if (exists("map_roads") & !is.null(map_roads)){
     if (road_dist_min > 0){
-      map_temp_habitat[dist_rd < road_dist_min] <- 0
+      excluded[which(raster::values(dist_rd) < road_dist_min)] <- TRUE
     }
-    # If road_dist_max > 0, assign 0 to pixels too far from the road
     if (road_dist_max > 0){
-      map_temp_habitat[dist_rd > road_dist_max] <- 0
+      excluded[which(raster::values(dist_rd) > road_dist_max)] <- TRUE
     }
   }
   
-  # Assign 0 to pixels too close to the water
+  # Exclude pixels too close to (or too far from) the water
   if (exists("map_waters") & !is.null(map_waters)){
     if (water_dist_min > 0){
-      map_temp_habitat[dist_wt < water_dist_min] <- 0
+      excluded[which(raster::values(dist_wt) < water_dist_min)] <- TRUE
     }
-    # If water_dist_max > 0, assign 0 to pixels too far from the water
     if (water_dist_max > 0){
-      map_temp_habitat[dist_wt > water_dist_max] <- 0
+      excluded[which(raster::values(dist_wt) > water_dist_max)] <- TRUE
     }
   }
   
-  # Assign 0 to pixels too close to the habitat edge
+  # Exclude pixels too close to (or too far from) the habitat edge
   if (edge_dist_min > 0){
-    map_temp_habitat[dist_ed < edge_dist_min] <- 0
+    excluded[which(raster::values(dist_ed) < edge_dist_min)] <- TRUE
   }
-  # If edge_dist_max > 0, assign 0 to pixels too far from the habitat edge
   if (edge_dist_max > 0){
-    map_temp_habitat[dist_ed > edge_dist_max] <- 0
+    excluded[which(raster::values(dist_ed) > edge_dist_max)] <- TRUE
   }
   
-  # If elevation_min > 0, assign 0 to pixels with too low elevation
-  if (elevation_min > 0){
-    map_temp_habitat[map_elevation < elevation_min] <- 0
-  }
-  # If elevation_max > 0, assign 0 to pixels with too high elevation
-  if (elevation_max > 0){
-    map_temp_habitat[map_elevation > elevation_max] <- 0
-  }
-  
-  # If slope_min > 0, assign 0 to pixels with slopes too gentle
-  if (exists("map_slope") & !is.null(map_slope)){
-    if (slope_min > 0){
-      map_temp_habitat[map_slope < slope_min] <- 0
+  # The elevation and slope maps are not necessarily on the same grid as the habitat map,
+  #   so these rules are applied with RasterLayer indexing, as in previous versions
+  if (elevation_min > 0 | elevation_max > 0 | 
+      (exists("map_slope") & !is.null(map_slope) & (slope_min > 0 | slope_max > 0))){
+    map_mask <- map_habitat
+    raster::values(map_mask) <- 1
+    # Pixels with too low (or too high) elevation
+    if (elevation_min > 0){
+      map_mask[map_elevation < elevation_min] <- 0
     }
-  }
-  # If slope_max > 0, assign 0 to pixels with slopes too steep
-  if (exists("map_slope") & !is.null(map_slope)){
-    if (slope_max > 0){
-      map_temp_habitat[map_slope > slope_max] <- 0
+    if (elevation_max > 0){
+      map_mask[map_elevation > elevation_max] <- 0
     }
+    # Pixels with slopes too gentle (or too steep)
+    if (exists("map_slope") & !is.null(map_slope)){
+      if (slope_min > 0){
+        map_mask[map_slope < slope_min] <- 0
+      }
+      if (slope_max > 0){
+        map_mask[map_slope > slope_max] <- 0
+      }
+    }
+    excluded[raster::values(map_mask) == 0] <- TRUE
+    rm(map_mask)
   }
   
-  # Remove regions assigned value of 0 from valid sample map
-  map_temp_habitat[map_temp_habitat==0] <- NA
+  # Exclude pixels of treatments assigned a value of 0
   if (exists("map_treatmt") & !is.null(map_treatmt)){
-    map_temp_treatmt <- map_treatmt
-    map_temp_habitat[map_temp_treatmt==0] <- NA
-    map_temp_treatmt[is.na(map_temp_habitat)] <- NA
+    values_treatmt <- raster::values(map_treatmt)
+    excluded[which(values_treatmt == 0)] <- TRUE
   }
+  
+  # Eligible pixels, in increasing order of cell number, with their coordinates
+  cand_cell <- which(!excluded)
+  cand_xy <- raster::xyFromCell(map_habitat, cand_cell)
+  cand_x <- cand_xy[, 1]
+  cand_y <- cand_xy[, 2]
+  rm(excluded, cand_xy)
   
   ###############
   ## 2.4.6. Acquire all bins (combinations of habitat*treatment) on map
-  # Convert raster maps into data frames to get values
-  map_temp_habitat_data <- raster::as.data.frame(map_temp_habitat)
-  # Rename columns
-  colnames(map_temp_habitat_data) <- "Habitat"
-  # Repeat for treatment map if it exists
+  # Unique combinations of habitat*treatment among eligible pixels, in order of first appearance
   if (exists("map_treatmt") & !is.null(map_treatmt)){
-    map_temp_treatmt_data <-  raster::as.data.frame(map_temp_treatmt)
-    colnames(map_temp_treatmt_data) <-  "Treatment"
-    # Combine the treatment and habitat data frames
-    landscapes <- cbind(map_temp_treatmt_data,map_temp_habitat_data)
+    landscapes <- data.frame(Treatment = values_treatmt[cand_cell],
+                             Habitat = values_habitat[cand_cell])
   } else {
-    # If treatment map doesn't exist, then just use habitat map
-    landscapes <- map_temp_habitat_data
+    landscapes <- data.frame(Habitat = values_habitat[cand_cell])
   }
-  # Get all unique combinations of habitat*treatment
+  # Bin of each eligible pixel (NA if it has no treatment)
+  cand_key <- do.call(paste, landscapes)
   landscapes <- unique(landscapes)
   # Remove NA values
   landscapes <- stats::na.omit(landscapes)
+  cand_bin <- match(cand_key, do.call(paste, landscapes))
+  rm(cand_key)
   
   ###############
   ## 2.4.7. Generation of sample points
@@ -395,24 +373,69 @@ ecosamp <- function(# Required inputs
     sd_pointcount <- data.frame(habitat=landscapes$Habitat, points=0)
   }
   ## 2.4.7.2. Loop to generate sample points
-  # Create a copy of combinations
+  # Create a copy of combinations, with a bin number and the number of eligible pixels in each bin
   sd_landscape <- landscapes
-  # Calculate number of pixels for each combination
-  if (exists("map_treatmt") & !is.null(map_treatmt)){
-    sd_landscape$n_pixels <- mapply(
-      function(treatment, habitat) {
-        sum(map_temp_treatmt[] == treatment & map_temp_habitat[] == habitat,na.rm = TRUE)
-      },
-      sd_landscape$Treatment,
-      sd_landscape$Habitat
-    )
-  } else {
-    sd_landscape$n_pixels <- mapply(
-      function(habitat) {
-        sum(map_temp_habitat[] == habitat,na.rm = TRUE)
-      },
-      sd_landscape$Habitat
-    )
+  sd_landscape$bin <- seq_len(nrow(landscapes))
+  sd_landscape$n_pixels <- tabulate(cand_bin, nbins = nrow(landscapes))
+  
+  # If no minimum number of points per bin is required, skip the bin-filling
+  #   stage, so all points are sampled from the whole eligible region
+  if (point_number_min <= 0){
+    sd_landscape <- sd_landscape[0, ]
+  }
+  
+  # For max-distance sampling: distance from each eligible pixel to its nearest existing point
+  cand_mindist <- rep(Inf, length(cand_cell))
+  # Name of the value column returned by raster::sampleRandom() in previous versions
+  layer_name <- names(map_habitat)
+  
+  # Select one of the eligible pixels in idx (positions in cand_cell). This makes the same single
+  #   random draw over the same pixels, in the same order, as raster::sampleRandom(size = 1) and
+  #   ecosamp_maxdist_select(), so results are identical to previous versions for the same seed.
+  select_cell <- function(idx){
+    if (max_distance_sampling == FALSE){
+      if (length(idx) == 1) {
+        return(cand_cell[idx])
+      }
+      return(cand_cell[idx[ceiling(stats::runif(1) * length(idx))]])
+    }
+    if (nrow(sd_points) == 0) {
+      return(sample(cand_cell[idx], size = 1))
+    }
+    return(cand_cell[idx[which.max(cand_mindist[idx])]])
+  }
+  
+  # Record a new sample point at pixel cell_new
+  #   (value: the value of the selected pixel, reported in column "layer" by previous versions)
+  add_point <- function(cell_new, value, treatment_first){
+    xy_new <- raster::xyFromCell(map_habitat, cell_new)
+    site <- data.frame(x = xy_new[1], y = xy_new[2])
+    if (max_distance_sampling == FALSE){
+      site[[layer_name]] <- value
+    }
+    # Extract the treatment and habitat type of the point
+    if (exists("map_treatmt") & !is.null(map_treatmt) & treatment_first){
+      site$treatment <- values_treatmt[cell_new]
+    }
+    site$habitat <- values_habitat[cell_new]
+    if (exists("map_treatmt") & !is.null(map_treatmt) & !treatment_first){
+      site$treatment <- values_treatmt[cell_new]
+    }
+    # Distance from each remaining eligible pixel to the new point
+    if (point_dist_min > 0 | max_distance_sampling == TRUE){
+      dist_new <- sqrt((cand_x - xy_new[1])^2 + (cand_y - xy_new[2])^2)
+      cand_mindist <<- pmin(cand_mindist, dist_new)
+      # Remove pixels too close to the point (prevent points being generated too close)
+      if (point_dist_min > 0){
+        keep <- !(dist_new <= point_dist_min)
+        cand_cell <<- cand_cell[keep]
+        cand_x <<- cand_x[keep]
+        cand_y <<- cand_y[keep]
+        cand_bin <<- cand_bin[keep]
+        cand_mindist <<- cand_mindist[keep]
+      }
+    }
+    return(site)
   }
   
   # A variable to count number of generated points
@@ -420,7 +443,7 @@ ecosamp <- function(# Required inputs
   
   print("Generating sample points...")
   repeat{  # Loop start
-    if (!any(!is.na(raster::values(map_temp_habitat)))) {
+    if (length(cand_cell) == 0) {
       message("No further valid region on sample map. Sample point generation stopping early.")
       break
     }
@@ -433,7 +456,7 @@ ecosamp <- function(# Required inputs
     if (nrow(sd_landscape) >= 1){
       if (area_weighting == TRUE){
         # If area_weighting is TRUE, the combination with smallest remaining pixel will be selected
-        sample_id <- sd_landscape %>% dplyr::slice_min(n_pixels, n = 1, with_ties = FALSE)
+        sample_id <- sd_landscape[which.min(sd_landscape$n_pixels), ]
       } else {
         # If area_weighting is FALSE, randomly select a row in the list and return to sample_id,
         #   if not, sample_id will return NA
@@ -443,138 +466,51 @@ ecosamp <- function(# Required inputs
     
     # If sample_id is not NA, sample from the pixels with the same treatment*habitat combination
     #   as sample_id
-    #sample_check <- ifelse((exists("map_treatmt") & !is.null(map_treatmt)),sample_id[1,],sample_id[1])
     if(!is.na(unlist(sample_id)[1])){
-      # Create a copy of the base map
-      sites_sample <- map_temp_habitat
-      # Only keep pixels with the same treatment*habitat combination as sample_id
-      #   discard other pixels
-      if (exists("map_treatmt") & !is.null(map_treatmt)){
-        sites_sample[] <- ifelse(map_temp_treatmt[]==sample_id$Treatment & 
-                                   map_temp_habitat[]==sample_id$Habitat,
-                                 1,
-                                 NA)
-      } else {
-        sites_sample[] <- ifelse(map_temp_habitat[] == sample_id$Habitat,1,NA)
-      }
+      # Remaining eligible pixels with the same treatment*habitat combination as sample_id
+      idx_bin <- which(cand_bin == sample_id$bin)
       # If there's no further valid region for this bin on the map, 
       # skip this bin and remove it from the list
-      if (!any(!is.na(raster::values(sites_sample)))) {
+      if (length(idx_bin) == 0) {
         message("Not enough area for this bin, minimum number of points cannot be reached:")
         message(paste("Habitat:",index_habitat$Field[index_habitat$Index==sample_id$Habitat]))
         if (exists("map_treatmt") & !is.null(map_treatmt)){
           message(paste("Treatment:",index_treatmt$Field[index_treatmt$Index==sample_id$Treatment]))
         }
         count <- count - 1
-        sd_landscape <- sd_landscape[!(sd_landscape$Habitat==sample_id$Habitat),]
+        # Only remove this habitat*treatment combination, not other treatments of the same habitat
+        sd_landscape <- sd_landscape[sd_landscape$bin != sample_id$bin, ]
       } else {
-        # If max_distance_sampling is FALSE, randomly select a point in the remaining pixels
-        if (max_distance_sampling == FALSE){
-          samp <- raster::sampleRandom(x=sites_sample, size = 1, na.rm = TRUE, xy = TRUE)
-        } else  {
-          # If max_distance_sampling is TRUE, run ecosamp_maxdist_select to allocate furthest pixel from existing points
-          samp <- ecosamp_maxdist_select(sites_sample, sd_points)
-        }
-        
-        # Convert output into a data frame and create a backup
-        samp <- as.data.frame(samp)
-        site <- samp
-
-        # Convert samp into a spatial data frame
-        sp::coordinates(samp) <- ~ x + y
-        # Extract the treatment and habitat type of the point
-        if (exists("map_treatmt") & !is.null(map_treatmt)){
-          site$treatment <- raster::extract(map_refmap$Treatment,samp)
-        }
-        site$habitat <- raster::extract(map_refmap$Habitat,samp)
-        
-        # Combine and store new point with previous points
+        # Select a pixel (randomly, or furthest from existing points) and store the new point
+        site <- add_point(select_cell(idx_bin), value = 1, treatment_first = TRUE)
         sd_points <- rbind(sd_points,site)
         
-        # Remove pixels too close to the point generated (prevent points being generated too close)
-        #   Calculate distance from each pixel to the new point
-        if (point_dist_min>0) {
-          d1 <- raster::distanceFromPoints(map_temp_habitat, samp) 
-          #   Remove pixels too close to the point
-          map_temp_habitat[d1 <= point_dist_min] <- 0 
-          map_temp_habitat[map_temp_habitat==0] <- NA   
-          if (exists("map_treatmt") & !is.null(map_treatmt)){
-            map_temp_treatmt[map_temp_habitat==0] <- NA
-          }
-        }
         # Update n_pixels column in sd_landscape
-        if (exists("map_treatmt") & !is.null(map_treatmt)){
-          sd_landscape$n_pixels <- mapply(
-            function(treatment, habitat) {
-              sum(map_temp_treatmt[] == treatment & map_temp_habitat[] == habitat,na.rm = TRUE)
-            },
-            sd_landscape$Treatment,
-            sd_landscape$Habitat
-          )
-        } else {
-          sd_landscape$n_pixels <- mapply(
-            function(habitat) {
-              sum(map_temp_habitat[] == habitat,na.rm = TRUE)
-            },
-            sd_landscape$Habitat
-          )
-        }
+        sd_landscape$n_pixels <- tabulate(cand_bin, nbins = nrow(landscapes))[sd_landscape$bin]
         
         # Add 1 to the count of this combination
         if (exists("map_treatmt") & !is.null(map_treatmt)){
           sd_pointcount$points[sd_pointcount$habitat==site$habitat & sd_pointcount$treatment==site$treatment] <- 
             sd_pointcount$points[sd_pointcount$habitat==site$habitat & sd_pointcount$treatment==site$treatment]+1
           # If minimum number is reached for this combination, remove it from the list
-          if (sd_pointcount$points[sd_pointcount$habitat==site$habitat & sd_pointcount$treatment==site$treatment]==point_number_min){
+          if (sd_pointcount$points[sd_pointcount$habitat==site$habitat & sd_pointcount$treatment==site$treatment]>=point_number_min){
             sd_landscape <- sd_landscape[!(sd_landscape$Treatment==site$treatment & sd_landscape$Habitat==site$habitat),]
           }
         } else {
           sd_pointcount$points[sd_pointcount$habitat==site$habitat] <- 
             sd_pointcount$points[sd_pointcount$habitat==site$habitat]+1
           # If minimum number is reached for this combination, remove it from the list
-          if (sd_pointcount$points[sd_pointcount$habitat==site$habitat]==point_number_min){
+          if (sd_pointcount$points[sd_pointcount$habitat==site$habitat]>=point_number_min){
             sd_landscape <- sd_landscape[!(sd_landscape$Habitat==site$habitat),]
           }      
         }
       }
       # If sample_id is NA, sample from all the remaining pixels on the map
     } else{
-      # Create a copy of the base map
-      sites_sample <- map_temp_habitat
-      # Randomly select a point in the remaining pixels
-      # If maxdistance is FALSE, randomly select a point in the remaining pixels
-      if (max_distance_sampling == FALSE){
-        samp <- raster::sampleRandom(x=sites_sample, size = 1, na.rm = TRUE, xy = TRUE)
-      } else  {
-        samp <- ecosamp_maxdist_select(sites_sample, sd_points)
-      }
-      
-      # Convert output into a data frame and create a backup
-      samp <- as.data.frame(samp)
-      site <- samp
-      
-      # Convert samp into a spatial data frame      
-      sp::coordinates(samp) <- ~ x + y
-      # Extract the habitat (and treatment) type of the point
-      site$habitat <- raster::extract(map_refmap$Habitat,samp)
-      if (exists("map_treatmt") & !is.null(map_treatmt)){
-        site$treatment <- raster::extract(map_refmap$Treatment,samp)
-      }
-      
-      # Combine and store new point with previous points
+      # Select a pixel (randomly, or furthest from existing points) and store the new point
+      cell_new <- select_cell(seq_along(cand_cell))
+      site <- add_point(cell_new, value = values_habitat[cell_new], treatment_first = FALSE)
       sd_points <- rbind(sd_points,site)
-      
-      # Remove pixels too close to the point generated
-      #   Calculate distance from each pixel to the new point
-      if (point_dist_min>0) {
-        d1 <- raster::distanceFromPoints(map_temp_habitat, samp) 
-        #   Remove pixels too close to the point
-        map_temp_habitat[d1<=point_dist_min] <- 0 
-        map_temp_habitat[map_temp_habitat==0] <- NA
-        if (exists("map_treatmt") & !is.null(map_treatmt)){
-          map_temp_treatmt[map_temp_habitat==0] <-  NA
-        }
-      }
       
       # Add 1 to the count of this combination
       if (exists("map_treatmt") & !is.null(map_treatmt)){
@@ -637,7 +573,7 @@ ecosamp <- function(# Required inputs
   sd_points_sp <- sd_points
   # Convert sd_points_sp into spatial data frame
   sp::coordinates(sd_points_sp) <- ~x+y
-  crs(sd_points_sp) <- sd_crs
+  raster::crs(sd_points_sp) <- sd_crs
   
   # Convert numeric habitat and treatment features back to text
   if (exists("index_habitat") & !is.null(index_habitat)){
